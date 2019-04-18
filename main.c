@@ -47,8 +47,6 @@ void TIM7Config(void);
 			while(!RCC_CR_HSIRDY);  //Waiting for HSI clock is ready
 			RCC->CFGR |=RCC_CFGR_SW_HSI; //HSI selected as system clock
 		  RCC->AHBENR |= RCC_AHBENR_GPIOBEN;  //GPIOB clock enable
-		  GPIOB->MODER &= ~GPIO_MODER_MODER3_Msk; //Zeroing of MODER3 register
-		  GPIOB->MODER |= 0x01<<GPIO_MODER_MODER3_Pos; //Set MODER3 into 01 (General purpose output mode)
 			RCC->APB1ENR |= RCC_APB1ENR_TIM2EN; //TIM2 timer clock enable
 		  RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;  //TIM7 timer clock enable
 	}
@@ -86,7 +84,7 @@ void TIM7Config(void);
 
 	void configureTimerForPWM(void){
 		
-		TIM2->ARR =0xFFFF;  // Set auto reload value
+		TIM2->ARR = 0xFFFF;  // Set auto reload value
 		TIM2->CCMR1 |= TIM_CCMR1_OC2M_1| TIM_CCMR1_OC2M_2; // configure chanel 2 of TIM2 as the PWM 
 		TIM2->CCER |= TIM_CCER_CC2E;	//enble to capture/compare on channel 2 of TIM2
 		NVIC_EnableIRQ(TIM2_IRQn);
@@ -96,43 +94,63 @@ void TIM7Config(void);
 		TIM2->CR1 |= TIM_CR1_CEN;  // Set ON TIM2
 	}
 	
-	uint16_t width=0;
+	void TIM7Config (void){
 
-void TIM7Config (void){
 	TIM7->PSC = 8000 - 1;  // frequency set
 	TIM7->ARR = 1000 - 1;  // auto-reload set
-	//TIM7->CCR1 = 1000;  // Pulse length
-	//TIM7->RCR = 1-1;  // Amount of pulses
 	NVIC_EnableIRQ(TIM7_IRQn);
 	TIM7->CR1 |= TIM_CR1_URS;  //
 	TIM7->EGR |= TIM_EGR_UG;  //
 	TIM7->DIER |= TIM_DIER_UIE;  // let the enterrupt be
 	TIM7->SR = 0;
-	//TIM7->CR1 &= ~TIM_CR1_CEN;  //start counter
+	TIM7->CR1 &= ~TIM_CR1_CEN;  //start counter
 	
 }	
 	
+	uint16_t width=0;
+
 void TIM2_IRQHandler(void){
 	
-		NVIC_ClearPendingIRQ(TIM2_IRQn); //clear interrupt flags in the core
-		TIM2->SR = 0;										// clear interrupt flags in the TIM2
-	
-		TIM2->CCR2 = rint(32767.5*(sin(2*pi/65535*width-pi/2)+1));			// set pulse time("1"). Change from "0" to "1"
-		width +=0xFF;
-	
-	if (cnt != 0) {  //we should set led pin (cnt) times
-		
-	}
+	NVIC_ClearPendingIRQ(TIM2_IRQn); //clear interrupt flags in the core
+	TIM2->SR = 0;										// clear interrupt flags in the TIM2
+
+	TIM2->CCR2 = rint(32767.5*(sin(2*pi/65535*width-pi/2)+1));			// set pulse time("1"). Change from "0" to "1"
+	width +=0xFF;
 }
 
 void TIM7_IRQHandler(void){
-	
 	TIM7->SR = 0;  //Clear status pin
-	//TIM2->CR1 &= ~TIM_CR1_CEN;  // Set off TIM 2	
-	//TIM7->CR1 |= TIM_CR1_CEN;  // Set TIM7 count
-  //TIM2->CR1 |= TIM_CR1_CEN;  //  Set on TIM 2
-	cnt += 1;	
+	if (mode == 0) {
+		cnt += 1;	
 	}
+	else {
+		if (cnt > 1 ){  //we should set led pin (cnt) times 
+			if(GPIOB->ODR & 1<<3) {   // if PB3 set
+						GPIOB->BRR =1<<3;				// reset
+					}
+			else{
+						GPIOB->BSRR =1<<3; 			// set
+						cnt -= 1;
+					}
+	}
+	else if (cnt == 1 && mode == 1) {
+		if(GPIOB->ODR & 1<<3) {   // if PB3 set
+						GPIOB->BRR =1<<3;				// reset
+					}
+					else{
+						TIM7->CR1 &= ~TIM_CR1_CEN;
+						TIM7->ARR = 1000 - 1;
+						GPIOB->BSRR =1<<3; 			// set
+						GPIOB->MODER &= ~GPIO_MODER_MODER3_Msk;  // Zeroing MODER3 register
+						GPIOB->MODER |= 0x02<<GPIO_MODER_MODER3_Pos; //configure PB3 as alternative function pin
+						GPIOB->AFR[0] &=~GPIO_AFRL_AFRL3_Msk ;			//clear AFRL3 register. This register contains 2 levels . 1 - AFRL(0-7 pins) , 2 - AFRH(8-15 pins);
+						GPIOB->AFR[0] |=0x01<<GPIO_AFRL_AFRL3_Pos ;	//our alternative function is AF1. So we are writing it in AFRL3.
+						TIM2->CR1 |= TIM_CR1_CEN;
+						cnt = 0;
+					}
+	    }   
+  }	
+}
 
 void EXTI3_IRQHandler (void){
 		if (EXTI->PR & EXTI_PR_PR3) {
@@ -142,8 +160,17 @@ void EXTI3_IRQHandler (void){
 				mode = 0;
 			}
 			else {
-				TIM7->CR1 &= ~TIM_CR1_CEN;
+				//TIM7->CR1 &= ~TIM_CR1_CEN;
+				TIM7->ARR = 500 - 1;
+				TIM2->CCR2 = 0;  // Led off
+				TIM2->CR1 &= ~TIM_CR1_CEN;
+				
+				GPIOB->MODER &= ~GPIO_MODER_MODER3_Msk; //Zeroing of MODER3 register
+				GPIOB->MODER |= 0x01<<GPIO_MODER_MODER3_Pos; //Set MODER3 into 01 (General purpose output mode)
+				//GPIOB->BSRR = GPIO_BSRR_BS_3; //Sets the corresponding ODRx bit   (why don't we set ODR bit)
+				
 				mode = 1;
+				//cnt += 1;
 			}
 			
 			EXTI->PR |= EXTI_PR_PR3;  //Cleared flag
