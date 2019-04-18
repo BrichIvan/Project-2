@@ -108,14 +108,27 @@ void TIM7Config(void);
 }	
 	
 	uint16_t width=0;
+  uint8_t Cot = 0;
 
 void TIM2_IRQHandler(void){
 	
 	NVIC_ClearPendingIRQ(TIM2_IRQn); //clear interrupt flags in the core
 	TIM2->SR = 0;										// clear interrupt flags in the TIM2
 
-	TIM2->CCR2 = rint(32767.5*(sin(2*pi/65535*width-pi/2)+1));			// set pulse time("1"). Change from "0" to "1"
-	width +=0xFF;
+	if (width >=0xFF00){
+						Cot = 1;
+					}
+					if (width <=0x00FF){
+						Cot = 0;
+					}
+				  if (Cot) {
+						TIM2->CCR2 = width;			// set pulse time("1"). Change from "0" to "1"
+						width -=0xFF;
+					}
+					else {
+						TIM2->CCR2 = width;			// set pulse time("1"). Change from "0" to "1"
+						width +=0xFF;
+					}
 }
 
 void TIM7_IRQHandler(void){
@@ -126,27 +139,29 @@ void TIM7_IRQHandler(void){
 	else {
 		if (cnt > 1 ){  //we should set led pin (cnt) times 
 			if(GPIOB->ODR & 1<<3) {   // if PB3 set
-						GPIOB->BRR =1<<3;				// reset
+						GPIOB->BRR = 1<<3;				// reset
+						cnt -= 1;
 					}
 			else{
 						GPIOB->BSRR =1<<3; 			// set
-						cnt -= 1;
 					}
 	}
 	else if (cnt == 1 && mode == 1) {
 		if(GPIOB->ODR & 1<<3) {   // if PB3 set
-						GPIOB->BRR =1<<3;				// reset
-					}
-					else{
-						TIM7->CR1 &= ~TIM_CR1_CEN;
-						TIM7->ARR = 1000 - 1;
-						GPIOB->BSRR =1<<3; 			// set
+						GPIOB->BRR = 1<<3;				// reset
+						while (GPIOB->ODR != 0);
 						GPIOB->MODER &= ~GPIO_MODER_MODER3_Msk;  // Zeroing MODER3 register
 						GPIOB->MODER |= 0x02<<GPIO_MODER_MODER3_Pos; //configure PB3 as alternative function pin
-						GPIOB->AFR[0] &=~GPIO_AFRL_AFRL3_Msk ;			//clear AFRL3 register. This register contains 2 levels . 1 - AFRL(0-7 pins) , 2 - AFRH(8-15 pins);
-						GPIOB->AFR[0] |=0x01<<GPIO_AFRL_AFRL3_Pos ;	//our alternative function is AF1. So we are writing it in AFRL3.
+						GPIOB->AFR[0] &= ~GPIO_AFRL_AFRL3_Msk ;			//clear AFRL3 register. This register contains 2 levels . 1 - AFRL(0-7 pins) , 2 - AFRH(8-15 pins);
+						GPIOB->AFR[0] |= 0x01<<GPIO_AFRL_AFRL3_Pos ;	//our alternative function is AF1. So we are writing it in AFRL3.
+						TIM7->CR1 &= ~TIM_CR1_CEN;
+						TIM7->ARR = 1000 - 1;
 						TIM2->CR1 |= TIM_CR1_CEN;
+						TIM2->SR = 0;
 						cnt = 0;
+					}
+					else{
+						GPIOB->BSRR =1<<3; 			// set
 					}
 	    }   
   }	
@@ -160,16 +175,19 @@ void EXTI3_IRQHandler (void){
 				mode = 0;
 			}
 			else {
-				//TIM7->CR1 &= ~TIM_CR1_CEN;
+				TIM7->CR1 &= ~TIM_CR1_CEN;
+				
 				TIM7->ARR = 500 - 1;
 				TIM2->CCR2 = 0;  // Led off
 				TIM2->CR1 &= ~TIM_CR1_CEN;
+				mode = 1;
 				
 				GPIOB->MODER &= ~GPIO_MODER_MODER3_Msk; //Zeroing of MODER3 register
 				GPIOB->MODER |= 0x01<<GPIO_MODER_MODER3_Pos; //Set MODER3 into 01 (General purpose output mode)
-				//GPIOB->BSRR = GPIO_BSRR_BS_3; //Sets the corresponding ODRx bit   (why don't we set ODR bit)
 				
-				mode = 1;
+				TIM7->EGR |= TIM_EGR_UG;
+				TIM7->SR = 0;
+				TIM7->CR1 |= TIM_CR1_CEN;
 				//cnt += 1;
 			}
 			
