@@ -113,7 +113,6 @@ void TIM7Config(void);
   uint8_t Cot = 0;
 
 void TIM2_IRQHandler(void){
-	
 	NVIC_ClearPendingIRQ(TIM2_IRQn); //clear interrupt flags in the core
 	TIM2->SR = 0;										// clear interrupt flags in the TIM2
 
@@ -139,7 +138,7 @@ void TIM7_IRQHandler(void){
 		cnt += 1;	
 	}
 	else {
-		if (cnt > 1 ){  //we should set led pin (cnt) times 
+		if (cnt > 1){  //we should set led pin (cnt) times 
 			if(GPIOB->ODR & 1<<3) {   // if PB3 set
 						GPIOB->BRR = 1<<3;				// reset
 						cnt -= 1;
@@ -166,18 +165,20 @@ void TIM7_IRQHandler(void){
 						GPIOB->BSRR =1<<3; 			// set
 					}
 	    }   
-  }	
+  }
+	
 }
 
 void EXTI3_IRQHandler (void){
+	
 		if (EXTI->PR & EXTI_PR_PR3) {
-			
-			if (mode) {
+			EXTI->PR |= EXTI_PR_PR3;  //Cleared flag
+			if (mode == 1) {
+				mode = 0;
 				TIM7->CR1 |= TIM_CR1_CEN;  //start TIM7 counter
-				//mode = 0;
 			}
 			else {
-
+				
 				TIM7->ARR = 600 - 1;
 				TIM2->CCR2 = 0;  // Led off
 				TIM2->CR1 &= ~TIM_CR1_CEN;
@@ -185,13 +186,11 @@ void EXTI3_IRQHandler (void){
 				
 				GPIOB->MODER &= ~GPIO_MODER_MODER3_Msk; //Zeroing of MODER3 register
 				GPIOB->MODER |= 0x01<<GPIO_MODER_MODER3_Pos; //Set MODER3 into 01 (General purpose output mode)
-				//while(GPIOB->MODER | 0x01<<GPIO_MODER_MODER3_Pos;);
 				TIM7->EGR |= TIM_EGR_UG;
+				mode = 1;
 				TIM7->SR = 0;
-				cnt += 1;
+				//cnt += 1;
 			}
-		mode = !mode;
-		EXTI->PR |= EXTI_PR_PR3;  //Cleared flag
 		}
 
 }	
