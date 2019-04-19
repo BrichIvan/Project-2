@@ -84,10 +84,11 @@ void TIM7Config(void);
 
 	void configureTimerForPWM(void){
 		
-		TIM2->ARR = 0xFFFF;  // Set auto reload value
+		TIM2->ARR = 0xD6D8;  // Set auto reload value
 		TIM2->CCMR1 |= TIM_CCMR1_OC2M_1| TIM_CCMR1_OC2M_2; // configure chanel 2 of TIM2 as the PWM 
 		TIM2->CCER |= TIM_CCER_CC2E;	//enble to capture/compare on channel 2 of TIM2
 		NVIC_EnableIRQ(TIM2_IRQn);
+		NVIC_SetPriority(TIM2_IRQn, 1);
 		TIM2->EGR |= TIM_EGR_UG;
 		TIM2->DIER |= TIM_DIER_UIE;  // let the enterrupt be
 		TIM2->SR = 0;  //Reset status register
@@ -99,6 +100,7 @@ void TIM7Config(void);
 	TIM7->PSC = 8000 - 1;  // frequency set
 	TIM7->ARR = 1000 - 1;  // auto-reload set
 	NVIC_EnableIRQ(TIM7_IRQn);
+	NVIC_SetPriority(TIM7_IRQn, 0);
 	TIM7->CR1 |= TIM_CR1_URS;  //
 	TIM7->EGR |= TIM_EGR_UG;  //
 	TIM7->DIER |= TIM_DIER_UIE;  // let the enterrupt be
@@ -172,25 +174,24 @@ void EXTI3_IRQHandler (void){
 			
 			if (mode) {
 				TIM7->CR1 |= TIM_CR1_CEN;  //start TIM7 counter
-				mode = 0;
+				//mode = 0;
 			}
 			else {
-				TIM7->CR1 &= ~TIM_CR1_CEN;
-				
-				TIM7->ARR = 500 - 1;
+
+				TIM7->ARR = 600 - 1;
 				TIM2->CCR2 = 0;  // Led off
 				TIM2->CR1 &= ~TIM_CR1_CEN;
-				mode = 1;
+				//mode = 1;
 				
 				GPIOB->MODER &= ~GPIO_MODER_MODER3_Msk; //Zeroing of MODER3 register
 				GPIOB->MODER |= 0x01<<GPIO_MODER_MODER3_Pos; //Set MODER3 into 01 (General purpose output mode)
-				
+				//while(GPIOB->MODER | 0x01<<GPIO_MODER_MODER3_Pos;);
 				TIM7->EGR |= TIM_EGR_UG;
 				TIM7->SR = 0;
-				TIM7->CR1 |= TIM_CR1_CEN;
-				//cnt += 1;
+				cnt += 1;
 			}
-			
-			EXTI->PR |= EXTI_PR_PR3;  //Cleared flag
+		mode = !mode;
+		EXTI->PR |= EXTI_PR_PR3;  //Cleared flag
 		}
+
 }	
